@@ -1,0 +1,214 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0E1626" />
+<meta name="description" content="FileWall — an encrypted file vault that runs entirely in your browser. No server, no account." />
+<title>FileWall</title>
+<link rel="manifest" href="./manifest.json" />
+<link rel="icon" href="./icons/shield.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="./icons/shield.svg" />
+<link rel="stylesheet" href="./css/styles.css" />
+
+<!-- Unsupported-browser gate. Shown by app.js when OPFS is missing. -->
+<div id="unsupported" class="unsupported hidden">
+  <div class="unsupported-card">
+    <div class="logo-shield" aria-hidden="true"></div>
+    <h1>FileWall can't run here</h1>
+    <p>This browser is missing capabilities FileWall needs to store your files
+      securely on this device.</p>
+    <ul id="missing-features"></ul>
+    <p class="muted">Try a recent Chrome, Edge, Safari 16+, or Firefox 114+.</p>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+  <!-- Masthead ---------------------------------------------------------- -->
+  <header class="masthead">
+    <div class="brand">
+      <span class="logo-shield" aria-hidden="true"></span>
+      <div class="brand-text">
+        <span class="brand-name">FileWall</span>
+        <span class="brand-storage" id="storage-used">—</span>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="vault" role="tab">Vault</button>
+      <button class="tab" data-tab="hidden" role="tab">Hidden</button>
+      <button class="tab" data-tab="security" role="tab">Security</button>
+    </nav>
+  </header>
+
+  <!-- VAULT / HIDDEN shared browser ------------------------------------- -->
+  <main class="content">
+    <section id="view-vault" class="view active">
+      <div class="vault-controls">
+        <input id="search" class="search" type="search" placeholder="Search files…" />
+        <div class="pill-toggle" id="vault-pill">
+          <button class="pill active" data-vault="unlocked">Unlocked</button>
+          <button class="pill" data-vault="hidden">Hidden</button>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <span class="item-count" id="item-count">0 items</span>
+        <div class="toolbar-actions">
+          <label class="sort-wrap">
+            <select id="sort" class="select" aria-label="Sort by">
+              <option value="dateAdded">Date added</option>
+              <option value="name">Name</option>
+              <option value="size">Size</option>
+              <option value="category">Type</option>
+            </select>
+          </label>
+          <button class="icon-btn" id="sort-dir" title="Sort direction" aria-label="Sort direction">↓</button>
+          <button class="icon-btn" id="view-toggle" title="Grid / list" aria-label="Grid or list">▦</button>
+          <button class="icon-btn" id="select-toggle" title="Multi-select" aria-label="Select">☑</button>
+        </div>
+      </div>
+
+      <div class="selection-bar hidden" id="selection-bar">
+        <span id="selection-count">0 selected</span>
+        <div class="spacer"></div>
+        <button class="btn ghost" id="sel-move">Move</button>
+        <button class="btn ghost danger" id="sel-delete">Delete</button>
+        <button class="btn ghost" id="sel-cancel">Cancel</button>
+      </div>
+
+      <div class="folders" id="folders"></div>
+
+      <div class="files" id="files"></div>
+
+      <div class="empty-state hidden" id="empty-state">
+        <span class="logo-shield large" aria-hidden="true"></span>
+        <h2>Your vault is empty</h2>
+        <p class="muted">Drag files anywhere, or tap the button to add photos,
+          videos and documents. Everything is encrypted on this device.</p>
+      </div>
+    </section>
+
+    <!-- HIDDEN gate view ------------------------------------------------- -->
+    <section id="view-hidden" class="view">
+      <div class="hidden-gate" id="hidden-gate">
+        <span class="logo-shield large" aria-hidden="true"></span>
+        <h2 id="hidden-title">Hidden vault</h2>
+        <p class="muted" id="hidden-sub">Enter your passcode to continue.</p>
+
+        <div class="passcode-dots" id="passcode-dots">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="lockout hidden" id="lockout-msg"></div>
+
+        <div class="keypad" id="keypad">
+          <button>1</button><button>2</button><button>3</button>
+          <button>4</button><button>5</button><button>6</button>
+          <button>7</button><button>8</button><button>9</button>
+          <button class="key-bio" id="key-bio" title="Use biometrics">☉</button>
+          <button>0</button>
+          <button class="key-del" id="key-del" aria-label="Delete">⌫</button>
+        </div>
+        <button class="btn ghost hidden" id="hidden-biometric">Unlock with biometrics</button>
+      </div>
+    </section>
+
+    <!-- SECURITY view ---------------------------------------------------- -->
+    <section id="view-security" class="view">
+      <div class="security-grid">
+        <div class="card">
+          <h3>Storage</h3>
+          <div class="storage-bar" id="storage-bar"></div>
+          <div class="storage-legend" id="storage-legend"></div>
+          <div class="storage-est muted" id="storage-est">—</div>
+          <div class="persist-status" id="persist-status"></div>
+        </div>
+
+        <div class="card">
+          <h3>Hidden vault</h3>
+          <label class="row-toggle">
+            <span>Enable hidden vault</span>
+            <input type="checkbox" id="tg-hidden" class="switch" />
+          </label>
+          <label class="row-toggle">
+            <span>Biometric unlock (passkey)</span>
+            <input type="checkbox" id="tg-bio" class="switch" />
+          </label>
+          <label class="row-toggle">
+            <span>PIN fallback</span>
+            <input type="checkbox" id="tg-pin" class="switch" checked />
+          </label>
+          <p class="muted small" id="bio-availability"></p>
+        </div>
+
+        <div class="card">
+          <h3>Appearance</h3>
+          <div class="seg" id="seg-theme">
+            <button data-theme="system" class="active">System</button>
+            <button data-theme="light">Light</button>
+            <button data-theme="dark">Dark</button>
+          </div>
+          <h3 class="mt">Auto-lock after inactivity</h3>
+          <div class="seg" id="seg-autolock">
+            <button data-lock="15000">15s</button>
+            <button data-lock="30000" class="active">30s</button>
+            <button data-lock="60000">1m</button>
+            <button data-lock="300000">5m</button>
+            <button data-lock="0">Never</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Backup</h3>
+          <p class="muted small" id="backup-status">No backup yet.</p>
+          <div class="btn-row">
+            <button class="btn" id="btn-export">Export encrypted archive</button>
+            <button class="btn ghost" id="btn-import">Import archive</button>
+          </div>
+        </div>
+
+        <div class="card limits">
+          <h3>Limits — read this</h3>
+          <ul class="limits-list">
+            <li>This vault lives in your browser's storage. <strong>Clearing your
+              browsing data erases it permanently.</strong> There is no copy and
+              no recovery.</li>
+            <li>If the browser denies persistent storage, it may clear the vault
+              when the device runs low on space. Safari can clear it after about
+              a week of not visiting.</li>
+            <li>Keep an exported backup, and export again after adding anything
+              you can't afford to lose.</li>
+            <li>The vault protects against someone browsing your files. It is
+              <strong>not</strong> a defence against someone examining an
+              already-unlocked machine with developer tools.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Floating upload button --------------------------------------------- -->
+  <button class="fab" id="fab-upload" title="Add files" aria-label="Add files">＋</button>
+  <input type="file" id="file-input" multiple hidden />
+  <input type="file" id="archive-input" accept=".fwvault" hidden />
+
+  <!-- Drag overlay -------------------------------------------------------- -->
+  <div class="drop-overlay hidden" id="drop-overlay">
+    <div class="drop-inner"><span class="logo-shield large"></span><p>Drop to encrypt & add</p></div>
+  </div>
+
+  <!-- Progress toast ------------------------------------------------------ -->
+  <div class="toast hidden" id="toast">
+    <div class="toast-msg" id="toast-msg">Working…</div>
+    <div class="toast-bar"><div class="toast-fill" id="toast-fill"></div></div>
+  </div>
+</div>
+
+<!-- Viewer (full screen) -------------------------------------------------- -->
+<div class="viewer hidden" id="viewer">
+  <div class="viewer-stage" id="viewer-stage"></div>
+  <button class="viewer-close" id="viewer-close" aria-label="Close">✕</button>
+  <button class="viewer-info-btn" id="viewer-info-btn" aria-label="Details">ⓘ</button>
+  <aside class="viewer-details hidden" id="viewer-details"></aside>
+</div>
+
+<!-- Generic modal host ---------------------------------------------------- -->
+<div class="modal-host hidden" id="modal-host"></div>
+
+<script type="module" src="./js/app.js"></script>

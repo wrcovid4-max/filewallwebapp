@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#0E1626"/>
+  <g transform="translate(146 96)">
+    <!-- Quartered shield: top-left quadrant knocked out -->
+    <defs>
+      <clipPath id="shieldClip">
+        <path d="M110 0 L220 44 V180 C220 260 174 300 110 320 C46 300 0 260 0 180 V44 Z"/>
+      </clipPath>
+    </defs>
+    <g clip-path="url(#shieldClip)">
+      <rect x="0" y="0" width="220" height="320" fill="#B4C5FF"/>
+      <!-- knock out the top-left quadrant to background -->
+      <rect x="0" y="0" width="110" height="160" fill="#0E1626"/>
+      <!-- hairline dividers -->
+      <rect x="108" y="0" width="4" height="320" fill="#0E1626" opacity="0.35"/>
+      <rect x="0" y="158" width="220" height="4" fill="#0E1626" opacity="0.35"/>
+    </g>
+  </g>
+</svg>
