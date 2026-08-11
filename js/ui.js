@@ -25,6 +25,7 @@ const state = {
   search: '',
   theme: 'system',
   autolockMs: 30000,
+  showThumbs: true,
   passkeyId: null,
   // passcode entry buffers
   pinBuffer: '',
@@ -64,6 +65,7 @@ async function loadSettings() {
   state.viewMode = await store.getSetting('viewMode', 'grid');
   state.sort = await store.getSetting('sort', 'dateAdded');
   state.dir = await store.getSetting('dir', -1);
+  state.showThumbs = await store.getSetting('showThumbs', true);
   state.passkeyId = await store.getSetting('passkeyId', null);
 }
 
@@ -312,7 +314,7 @@ function renderFiles() {
 }
 
 async function loadThumb(f, tile) {
-  if (!f.thumbId) return;
+  if (!state.showThumbs || !f.thumbId) return; // honour the thumbnail-previews toggle
   try {
     const blob = await store.readThumb(f);
     if (!blob) return;
@@ -709,8 +711,15 @@ function wireSecurity() {
     state.autolockMs = Number(b.dataset.lock);
     $$('#seg-autolock button').forEach((x) => x.classList.toggle('active', x === b));
     await store.setSetting('autolockMs', state.autolockMs);
+    updateAutolockHint();
     resetAutolock();
   }));
+
+  $('#tg-thumbs').addEventListener('change', async (e) => {
+    state.showThumbs = e.target.checked;
+    await store.setSetting('showThumbs', state.showThumbs);
+    renderFiles();
+  });
 
   $('#tg-hidden').addEventListener('change', (e) => onToggleHidden(e.target.checked));
   $('#tg-bio').addEventListener('change', (e) => onToggleBio(e.target.checked));
@@ -730,8 +739,10 @@ async function refreshSecurityUI() {
   $('#bio-availability').textContent = avail
     ? 'A passkey (Touch ID / Face ID / Windows Hello) can unlock the hidden vault on this browser.'
     : 'This browser does not expose passkeys with PRF — use the PIN fallback.';
+  $('#tg-thumbs').checked = state.showThumbs;
   $$('#seg-theme button').forEach((x) => x.classList.toggle('active', x.dataset.theme === state.theme));
   $$('#seg-autolock button').forEach((x) => x.classList.toggle('active', Number(x.dataset.lock) === state.autolockMs));
+  updateAutolockHint();
   await refreshBackupStatus();
   await refreshStorageUI();
   await refreshPersistence();
@@ -920,6 +931,15 @@ function importArchiveFlow(file) {
 // ---------------------------------------------------------------------------
 // Theme
 // ---------------------------------------------------------------------------
+
+function updateAutolockHint() {
+  const el4 = $('#autolock-hint');
+  if (!el4) return;
+  const ms = state.autolockMs;
+  if (!ms) { el4.textContent = '🔓 Never auto-locks — the hidden vault stays open until you leave or reload.'; return; }
+  const label = ms >= 60000 ? `${ms / 60000} minute(s)` : `${ms / 1000} seconds`;
+  el4.textContent = `🔒 Locks the hidden vault after ${label} of no activity.`;
+}
 
 function applyTheme(theme) {
   if (theme === 'system') document.documentElement.removeAttribute('data-theme');

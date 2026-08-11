@@ -145,6 +145,7 @@
             <button data-theme="dark">Dark</button>
           </div>
           <h3 class="mt">Auto-lock after inactivity</h3>
+          <p class="muted small nudge">Locks the hidden vault after a period of no activity.</p>
           <div class="seg" id="seg-autolock">
             <button data-lock="15000">15s</button>
             <button data-lock="30000" class="active">30s</button>
@@ -152,6 +153,19 @@
             <button data-lock="300000">5m</button>
             <button data-lock="0">Never</button>
           </div>
+          <div class="hint" id="autolock-hint"></div>
+        </div>
+
+        <div class="card">
+          <h3>Preferences</h3>
+          <label class="row-toggle">
+            <span>
+              Thumbnail previews
+              <small class="row-sub">Show decrypted thumbnails on photo &amp; video tiles. Turn off for
+                plain type icons — faster, and nothing sensitive renders on the grid.</small>
+            </span>
+            <input type="checkbox" id="tg-thumbs" class="switch" checked />
+          </label>
         </div>
 
         <div class="card">
@@ -160,6 +174,36 @@
           <div class="btn-row">
             <button class="btn" id="btn-export">Export encrypted archive</button>
             <button class="btn ghost" id="btn-import">Import archive</button>
+          </div>
+        </div>
+
+        <div class="card unavailable">
+          <h3>Not available in the browser</h3>
+          <p class="muted small nudge">These exist in the FileWall Android &amp; iOS apps but no
+            web browser can provide them. Rather than fake them, FileWall shows them here honestly.</p>
+          <div class="na-row">
+            <div><strong>Block screenshots &amp; recents preview</strong>
+              <small class="row-sub">No web API can stop OS screenshots, screen recording, or the
+                app-switcher thumbnail. This is Android's <code>FLAG_SECURE</code>.</small></div>
+            <span class="na-tag">Native only</span>
+          </div>
+          <div class="na-row">
+            <div><strong>Sync to Wear OS</strong>
+              <small class="row-sub">A web page can't pair with or push files to a watch app.</small></div>
+            <span class="na-tag">Native only</span>
+          </div>
+          <div class="na-row">
+            <div><strong>Disable device storage sync</strong>
+              <small class="row-sub">A browser vault already has no access to device media storage —
+                its files live in a sandbox (OPFS), so there is nothing to disable.</small></div>
+            <span class="na-tag">N/A in browser</span>
+          </div>
+          <div class="na-row">
+            <div><strong>Cloud backup &amp; account</strong>
+              <small class="row-sub">FileWall on the web has no server and no account by design.
+                Use <em>Export encrypted archive</em> above and save the <code>.fwvault</code> file to
+                your own cloud drive.</small></div>
+            <span class="na-tag">No server</span>
           </div>
         </div>
 
@@ -179,6 +223,10 @@
               already-unlocked machine with developer tools.</li>
           </ul>
         </div>
+
+        <footer class="app-footer">
+          FileWall · runs entirely in your browser · no server, no account
+        </footer>
       </div>
     </section>
   </main>
