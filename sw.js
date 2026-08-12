@@ -17,7 +17,7 @@ import {
 import { parseHeader, openChunk, chunkCiphertextOffset, HEADER_SIZE } from './js/crypto.js';
 import { kvGet, getRecord } from './js/idb.js';
 
-const CACHE = 'filewall-shell-v1';
+const CACHE = 'filewall-shell-v2';
 const SHELL = [
   './', './index.html', './manifest.json',
   './css/styles.css',
@@ -64,16 +64,23 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(handleStream(e.request, url));
     return;
   }
-  // Shell: cache-first, fall back to network, then cache the response.
+  // Shell: NETWORK-FIRST so a freshly-served update always wins, with the cache
+  // as the offline fallback. (Cache-first caused stale files to persist after an
+  // update until the SW was manually unregistered.) We refresh the cache on every
+  // successful fetch so the latest shell is available offline next time.
   if (e.request.method === 'GET' && url.origin === self.location.origin) {
     e.respondWith((async () => {
-      const cached = await caches.match(e.request, { ignoreSearch: true });
-      if (cached) return cached;
       try {
         const res = await fetch(e.request);
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        }
         return res;
       } catch {
-        // Offline and uncached — for navigations, serve the shell index.
+        // Offline — serve from cache; for navigations fall back to the shell index.
+        const cached = await caches.match(e.request, { ignoreSearch: true });
+        if (cached) return cached;
         if (e.request.mode === 'navigate') return caches.match('./index.html');
         throw new Error('offline');
       }
