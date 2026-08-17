@@ -736,9 +736,16 @@ async function refreshSecurityUI() {
   $('#tg-bio').checked = state.hiddenMethods.includes('prf');
   $('#tg-pin').checked = state.hiddenMethods.includes('pass');
   const avail = wa.webauthnAvailable();
-  $('#bio-availability').textContent = avail
-    ? 'A passkey (Touch ID / Face ID / Windows Hello) can unlock the hidden vault on this browser.'
-    : 'This browser does not expose passkeys with PRF — use the PIN fallback.';
+  const bioEl = $('#bio-availability');
+  bioEl.classList.remove('note-ok', 'note-warn');
+  if (state.hiddenMethods.includes('prf')) {
+    bioEl.textContent = '✓ Biometric unlock is set up on this device.';
+    bioEl.classList.add('note-ok');
+  } else {
+    bioEl.textContent = avail
+      ? 'If your device supports the passkey PRF extension (newer macOS / iOS / Windows Hello), biometrics can unlock the hidden vault. Older devices don’t — the PIN is the fallback.'
+      : 'This browser has no passkey support — use the PIN fallback.';
+  }
   $('#tg-thumbs').checked = state.showThumbs;
   $$('#seg-theme button').forEach((x) => x.classList.toggle('active', x.dataset.theme === state.theme));
   $$('#seg-autolock button').forEach((x) => x.classList.toggle('active', Number(x.dataset.lock) === state.autolockMs));
@@ -805,23 +812,55 @@ function addPinMethod() {
   }, () => refreshSecurityUI());
 }
 
+function bioNote(msg, kind) {
+  const el = $('#bio-availability');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove('note-ok', 'note-warn');
+  if (kind) el.classList.add(kind === 'ok' ? 'note-ok' : 'note-warn');
+}
+
 async function onToggleBio(on) {
   if (on) {
-    if (!wa.webauthnAvailable()) { $('#tg-bio').checked = false; alert('Passkeys are not available in this browser.'); return; }
+    if (!wa.webauthnAvailable()) {
+      $('#tg-bio').checked = false;
+      bioNote('This browser has no passkey support — use the PIN fallback.', 'warn');
+      return;
+    }
     try {
-      const { credentialId, enabled } = await wa.registerPasskey();
-      if (!enabled) { $('#tg-bio').checked = false; alert('This device registered a passkey but it does not support the PRF extension needed for encryption. Use the PIN fallback.'); return; }
-      state.passkeyId = credentialId;
-      await store.setSetting('passkeyId', credentialId);
-      const secret = await wa.getPrfSecret(credentialId);
+      // Register a passkey. We evaluate PRF at creation AND fall back to an
+      // assertion probe, because the creation-time `enabled` flag is unreliable —
+      // some authenticators only surface a usable PRF secret on a later get().
+      const reg = await wa.registerPasskey();
+      let secret = reg.secret;
+      if (!secret) {
+        try { secret = await wa.getPrfSecret(reg.credentialId); } catch { secret = null; }
+      }
+      if (!secret) {
+        // Genuinely no PRF on this device/browser (common on older macOS/Windows
+        // Touch ID / Hello). Don't leave a half-enabled toggle; guide to PIN.
+        $('#tg-bio').checked = false;
+        state.passkeyId = null;
+        await store.setSetting('passkeyId', null);
+        bioNote('This device can’t derive an encryption key from its passkey (no PRF support — common on older systems). Biometric unlock isn’t available here; your PIN protects the hidden vault.', 'warn');
+        if (!state.hiddenMethods.includes('pass')) {
+          $('#tg-pin').checked = true;
+          onTogglePin(true); // offer to set a PIN right away
+        }
+        return;
+      }
+
+      state.passkeyId = reg.credentialId;
+      await store.setSetting('passkeyId', reg.credentialId);
+
       if (state.hiddenMethods.length === 0) {
         await store.setupHidden('prf', secret);
       } else if (state.hiddenMethods.includes('pass')) {
-        // Need the existing PIN to add biometric as a second method.
         promptPin('Enter your PIN to add biometrics', async (pin) => {
           await store.addHiddenMethod('pass', pin, 'prf', secret);
           state.hiddenMethods = await store.listHiddenMethods();
           await refreshSecurityUI();
+          bioNote('✓ Biometric unlock enabled.', 'ok');
         }, () => { $('#tg-bio').checked = false; });
         return;
       } else {
@@ -829,16 +868,25 @@ async function onToggleBio(on) {
       }
       state.hiddenMethods = await store.listHiddenMethods();
       await refreshSecurityUI();
+      bioNote('✓ Biometric unlock enabled.', 'ok');
     } catch (err) {
       $('#tg-bio').checked = false;
-      alert('Biometric setup failed: ' + (err.message || err));
+      const m = String((err && err.message) || err);
+      bioNote(/NotAllowed|Abort|cancel|timed out|timeout/i.test(m)
+        ? 'Biometric setup was cancelled or timed out. Try again, or use the PIN.'
+        : 'Biometric setup failed: ' + m, 'warn');
     }
   } else {
     if (!state.hiddenMethods.includes('prf')) return;
-    if (state.hiddenMethods.length <= 1) { $('#tg-bio').checked = true; alert('Keep at least one unlock method.'); return; }
+    if (state.hiddenMethods.length <= 1) {
+      $('#tg-bio').checked = true;
+      bioNote('Set a PIN first — the hidden vault must keep at least one unlock method.', 'warn');
+      return;
+    }
     await store.removeHiddenMethod('prf');
     state.hiddenMethods = await store.listHiddenMethods();
     await refreshSecurityUI();
+    bioNote('Biometric unlock removed.', null);
   }
 }
 

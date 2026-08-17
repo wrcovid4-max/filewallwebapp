@@ -45,12 +45,18 @@ export async function registerPasskey() {
         userVerification: 'required',
       },
       timeout: 60000,
-      extensions: { prf: {} },
+      // Ask to EVALUATE the PRF at creation, not just enable it. Some
+      // authenticators return a usable secret straight away; others only report
+      // it on a later assertion. Evaluating here lets the caller test for a real
+      // secret instead of trusting the (often absent) `enabled` flag alone.
+      extensions: { prf: { eval: { first: PRF_EVAL } } },
     },
   });
   const ext = cred.getClientExtensionResults();
   const enabled = !!(ext.prf && ext.prf.enabled);
-  return { credentialId: b64urlEncode(cred.rawId), enabled };
+  const first = ext.prf?.results?.first;
+  const secret = first ? new Uint8Array(first) : null;
+  return { credentialId: b64urlEncode(cred.rawId), enabled, secret };
 }
 
 // Get the PRF secret for an existing credential. Returns a Uint8Array (32 bytes)
