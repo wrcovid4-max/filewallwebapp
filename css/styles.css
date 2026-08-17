@@ -295,6 +295,11 @@ button { font-family: inherit; cursor: pointer; }
 
 .app-footer { text-align: center; color: var(--muted); font-size: 12px; padding: 8px 0 20px; }
 
+/* Inline status notes (e.g. biometric availability) */
+#bio-availability { margin-top: 14px; }
+.note-ok { color: var(--photo); font-weight: 600; }
+.note-warn { color: var(--doc); font-weight: 600; }
+
 .storage-bar { height: 16px; border-radius: var(--pill); background: var(--bg); overflow: hidden; display: flex; border: 1px solid var(--border); }
 .storage-bar span { height: 100%; }
 .storage-legend { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
