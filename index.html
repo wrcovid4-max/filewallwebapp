@@ -1,7 +1,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0E1626" />
-<meta name="description" content="FileWall — an encrypted file vault that runs entirely in your browser. No server, no account." />
+<meta name="description" content="FileWall — an encrypted file vault that runs entirely in your browser. Local by default; optional cross-device cloud sync stays end-to-end encrypted." />
 <title>FileWall</title>
 <link rel="manifest" href="./manifest.json" />
 <link rel="icon" href="./icons/shield.svg" type="image/svg+xml" />
@@ -177,6 +177,41 @@
           </div>
         </div>
 
+        <div class="card" id="cloud-sync-card">
+          <div class="row-between">
+            <h3>Cloud Sync</h3>
+            <span class="sync-status-pill" id="sync-status-pill">Not signed in</span>
+          </div>
+          <p class="muted small nudge">Real-time sync across every FileWall device signed in to
+            this account — Android, iOS, Web, Wear OS, watchOS. Files stay encrypted the whole
+            way; Google only ever stores ciphertext, the same as a hidden-vault item.</p>
+
+          <div id="sync-unconfigured" class="hidden">
+            <p class="muted small">Cloud sync isn't set up for this build yet —
+              see <code>firebase-config.js</code>.</p>
+          </div>
+
+          <div id="sync-signed-out" class="hidden">
+            <button class="btn" id="btn-sync-signin">Sign in with Google</button>
+          </div>
+
+          <div id="sync-signed-in" class="hidden">
+            <div id="sync-passphrase-row" class="hidden">
+              <p class="muted small">Signed in — set a sync passphrase to start syncing files.
+                It's separate from your vault PIN; use the <em>same</em> passphrase on every
+                device.</p>
+              <div class="sync-input-row">
+                <input type="password" id="sync-passphrase-input" placeholder="Sync passphrase" />
+                <button class="btn" id="btn-set-passphrase">Set</button>
+              </div>
+            </div>
+            <div class="btn-row">
+              <button class="btn ghost" id="btn-sync-now">Sync now</button>
+              <button class="btn ghost" id="btn-sync-signout">Sign out</button>
+            </div>
+          </div>
+        </div>
+
         <div class="card unavailable">
           <h3>Not available in the browser</h3>
           <p class="muted small nudge">These exist in the FileWall Android &amp; iOS apps but no
@@ -188,8 +223,10 @@
             <span class="na-tag">Native only</span>
           </div>
           <div class="na-row">
-            <div><strong>Sync to Wear OS</strong>
-              <small class="row-sub">A web page can't pair with or push files to a watch app.</small></div>
+            <div><strong>Direct watch pairing</strong>
+              <small class="row-sub">A web page can't pair with a Bluetooth watch app directly —
+                Wear OS/watchOS get their data via Cloud Sync above instead, same as every other
+                device on the account.</small></div>
             <span class="na-tag">Native only</span>
           </div>
           <div class="na-row">
@@ -197,13 +234,6 @@
               <small class="row-sub">A browser vault already has no access to device media storage —
                 its files live in a sandbox (OPFS), so there is nothing to disable.</small></div>
             <span class="na-tag">N/A in browser</span>
-          </div>
-          <div class="na-row">
-            <div><strong>Cloud backup &amp; account</strong>
-              <small class="row-sub">FileWall on the web has no server and no account by design.
-                Use <em>Export encrypted archive</em> above and save the <code>.fwvault</code> file to
-                your own cloud drive.</small></div>
-            <span class="na-tag">No server</span>
           </div>
         </div>
 
@@ -225,7 +255,7 @@
         </div>
 
         <footer class="app-footer">
-          FileWall · runs entirely in your browser · no server, no account
+          FileWall · runs entirely in your browser · cloud sync is opt-in, always end-to-end encrypted
         </footer>
       </div>
     </section>
