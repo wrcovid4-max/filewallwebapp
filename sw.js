@@ -17,12 +17,13 @@ import {
 import { parseHeader, openChunk, chunkCiphertextOffset, HEADER_SIZE } from './js/crypto.js';
 import { kvGet, getRecord } from './js/idb.js';
 
-const CACHE = 'filewall-shell-v2';
+const CACHE = 'filewall-shell-v3';
 const SHELL = [
   './', './index.html', './manifest.json',
   './css/styles.css',
   './js/config.js', './js/crypto.js', './js/idb.js', './js/storage.js',
   './js/worker.js', './js/app.js', './js/ui.js', './js/archive.js', './js/webauthn.js',
+  './js/sync.js', './js/firebase-config.js',
   './icons/shield.svg', './icons/icon-192.png', './icons/icon-512.png',
 ];
 
