@@ -2,6 +2,7 @@
 // No direct crypto or OPFS here; all of that lives behind the worker.
 
 import * as store from './storage.js';
+import * as sync from './sync.js';
 import * as wa from './webauthn.js';
 import {
   CATEGORY_COLORS, FOLDER_COLORS, CAT_PHOTO, CAT_VIDEO, CAT_DOC,
@@ -52,6 +53,7 @@ export async function init() {
   wireImport();
   wireHiddenGate();
   wireSecurity();
+  wireCloudSync();
   wireViewer();
   wireAutolock();
   applyTheme(state.theme);
@@ -728,6 +730,78 @@ function wireSecurity() {
   $('#btn-export').addEventListener('click', () => exportArchive());
   $('#btn-import').addEventListener('click', () => $('#archive-input').click());
   $('#archive-input').addEventListener('change', () => { const f = $('#archive-input').files[0]; if (f) importArchiveFlow(f); $('#archive-input').value = ''; });
+}
+
+let syncToastTimer = null;
+
+function wireCloudSync() {
+  sync.isAvailable().then((available) => {
+    $('#sync-unconfigured').classList.toggle('hidden', available);
+    if (!available) return;
+    refreshCloudSyncView();
+  });
+
+  $('#btn-sync-signin').addEventListener('click', async () => {
+    try {
+      await sync.signIn();
+      refreshCloudSyncView();
+    } catch (err) {
+      showToast(err.message || 'Sign-in failed', 0);
+      syncToastTimer = setTimeout(hideToast, 3000);
+    }
+  });
+
+  $('#btn-sync-signout').addEventListener('click', async () => {
+    await sync.signOut();
+    refreshCloudSyncView();
+  });
+
+  $('#btn-set-passphrase').addEventListener('click', async () => {
+    const input = $('#sync-passphrase-input');
+    const value = input.value;
+    if (value.length < 8) { showToast('Passphrase needs to be at least 8 characters', 0); syncToastTimer = setTimeout(hideToast, 2500); return; }
+    input.value = '';
+    await sync.setSyncPassphrase(value);
+    refreshCloudSyncView();
+  });
+
+  $('#btn-sync-now').addEventListener('click', () => sync.syncNow());
+
+  sync.onStatusChange((status) => {
+    const pill = $('#sync-status-pill');
+    pill.classList.remove('syncing', 'synced', 'error');
+    if (status.state === 'signed-out') pill.textContent = 'Not signed in';
+    if (status.state === 'idle') pill.textContent = 'Signed in';
+    if (status.state === 'syncing') { pill.textContent = status.label || 'Syncing…'; pill.classList.add('syncing'); }
+    if (status.state === 'synced') { pill.textContent = 'Synced ' + new Date(status.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); pill.classList.add('synced'); }
+    if (status.state === 'error') { pill.textContent = 'Sync issue'; pill.classList.add('error'); }
+
+    // The transient popup half of "say if backup/sync is happening or not" — the pill above
+    // is the persistent half, this rides the same toast every other long-running action uses,
+    // so it surfaces over whichever tab is open, not just the Security tab.
+    clearTimeout(syncToastTimer);
+    if (status.state === 'syncing') {
+      showToast(status.label || 'Syncing…', 0.5);
+    } else if (status.state === 'synced') {
+      showToast('Synced', 1);
+      syncToastTimer = setTimeout(hideToast, 1600);
+    } else if (status.state === 'error') {
+      showToast(status.message || 'Sync issue', 0);
+      syncToastTimer = setTimeout(hideToast, 3500);
+    } else {
+      hideToast();
+    }
+    refreshCloudSyncView(status);
+  });
+}
+
+function refreshCloudSyncView(status = sync.getStatus()) {
+  const signedIn = sync.isSignedIn();
+  $('#sync-signed-out').classList.toggle('hidden', signedIn);
+  $('#sync-signed-in').classList.toggle('hidden', !signedIn);
+  if (signedIn) {
+    $('#sync-passphrase-row').classList.toggle('hidden', sync.hasSyncPassphrase());
+  }
 }
 
 async function refreshSecurityUI() {

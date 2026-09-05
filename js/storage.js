@@ -130,6 +130,7 @@ export async function importFile(file, { hidden = false, folderId = null, videoT
     mime: file.type || 'application/octet-stream',
     size,
     dateAdded: Date.now(),
+    updatedAt: Date.now(),
     folderId,
     hidden: hidden ? 1 : 0,
     category,
@@ -142,6 +143,29 @@ export async function importFile(file, { hidden = false, folderId = null, videoT
 
 export async function listFiles() {
   return getAll(STORE_FILES);
+}
+
+/**
+ * Same pipeline as [importFile] but keyed by a caller-supplied id instead of minting a
+ * fresh uuid() — used only by sync.js when writing a file pulled from the cloud, so the
+ * local record's id matches the Firestore doc id it came from. Calling this twice with the
+ * same id and content is an upsert, not a duplicate: putRecord (IndexedDB) replaces by
+ * primary key, and the old blob/thumb (if any) are deleted first so nothing orphans in OPFS.
+ */
+export async function ingestRemoteFile(id, file, meta, onProgress) {
+  const { hidden = false, folderId = null, updatedAt = Date.now(), dateAdded = Date.now() } = meta;
+  const existing = await getRecord(STORE_FILES, id);
+  if (existing) await call('delete', { blobId: existing.blobId, thumbId: existing.thumbId });
+
+  const vault = hidden ? VAULT_HIDDEN : VAULT_MAIN;
+  const category = categoryForMime(file.type);
+  const { blobId, thumbId, size } = await call('import', { vault, file, videoThumb: null, category }, onProgress);
+  const record = {
+    id, name: file.name || 'Untitled', mime: file.type || 'application/octet-stream',
+    size, dateAdded, updatedAt, folderId, hidden: hidden ? 1 : 0, category, blobId, thumbId,
+  };
+  await putRecord(STORE_FILES, record);
+  return record;
 }
 
 export async function listFolders() {
@@ -167,6 +191,7 @@ export async function readThumb(record) {
 }
 
 export async function updateFile(record) {
+  record.updatedAt = Date.now();
   return putRecord(STORE_FILES, record);
 }
 
@@ -178,12 +203,15 @@ export async function deleteFile(record) {
 // ---- folders --------------------------------------------------------------
 
 export async function createFolder(name, color, hidden = false) {
-  const folder = { id: uuid(), name, color, hidden: hidden ? 1 : 0, dateAdded: Date.now() };
+  const folder = {
+    id: uuid(), name, color, hidden: hidden ? 1 : 0, dateAdded: Date.now(), updatedAt: Date.now(),
+  };
   await putRecord(STORE_FOLDERS, folder);
   return folder;
 }
 
 export async function updateFolder(folder) {
+  folder.updatedAt = Date.now();
   return putRecord(STORE_FOLDERS, folder);
 }
 

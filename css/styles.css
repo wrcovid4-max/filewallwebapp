@@ -279,6 +279,20 @@ button { font-family: inherit; cursor: pointer; }
 
 /* "Not available in the browser" rows — honest, non-interactive */
 .card.unavailable { border-style: dashed; }
+
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sync-status-pill {
+  font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: var(--pill);
+  background: var(--surface-2, rgba(127,127,127,.15)); color: var(--muted); white-space: nowrap;
+}
+.sync-status-pill.syncing { color: var(--primary); }
+.sync-status-pill.synced { color: var(--primary); background: rgba(46,214,107,.15); }
+.sync-status-pill.error { color: var(--danger); background: rgba(214,46,46,.12); }
+.sync-input-row { display: flex; gap: 10px; margin-top: 10px; }
+.sync-input-row input {
+  flex: 1; padding: 12px 14px; border-radius: var(--pill); border: 1px solid var(--border);
+  background: transparent; color: inherit; font-size: 14px;
+}
 .na-row {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
   padding: 14px 0; border-bottom: 1px solid var(--border);
