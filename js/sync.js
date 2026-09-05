@@ -32,7 +32,7 @@ import { firebaseConfig, isConfigured } from './firebase-config.js';
 import { FOLDER_COLORS } from './config.js';
 import * as store from './storage.js';
 
-const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/10.13.0/firebase';
+const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/12.18.0/firebase';
 
 let appPromise = null;
 let authMod = null;
@@ -87,7 +87,12 @@ async function ensureFirebase() {
       auth = authM.getAuth(app);
       db = fsM.getFirestore(app);
       fbStorage = stM.getStorage(app);
-      fsM.enableIndexedDbPersistence(db).catch(() => {}); // best-effort offline cache
+      // Best-effort offline cache. Deprecated in newer SDK releases in favour of
+      // persistentLocalCache(), so guard the call itself, not just its promise —
+      // an undefined export would otherwise throw synchronously before .catch() runs.
+      if (typeof fsM.enableIndexedDbPersistence === 'function') {
+        try { fsM.enableIndexedDbPersistence(db).catch(() => {}); } catch { /* ignore */ }
+      }
     })();
   }
   await appPromise;
