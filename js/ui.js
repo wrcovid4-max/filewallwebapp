@@ -765,6 +765,8 @@ function wireCloudSync() {
     refreshCloudSyncView();
   });
 
+  $('#btn-passphrase-info').addEventListener('click', () => openSyncPassphraseInfo());
+
   $('#btn-sync-now').addEventListener('click', () => sync.syncNow());
 
   sync.onStatusChange((status) => {
@@ -802,6 +804,24 @@ function refreshCloudSyncView(status = sync.getStatus()) {
   if (signedIn) {
     $('#sync-passphrase-row').classList.toggle('hidden', sync.hasSyncPassphrase());
   }
+}
+
+function openSyncPassphraseInfo() {
+  openModal(`
+    <h3>What is a sync passphrase?</h3>
+    <ol class="info-steps">
+      <li>Make sure you're signed in with Google on this device first — that's the button above this one.</li>
+      <li>Pick a passphrase, at least 8 characters. Think of it as a shared password between all your devices — it is separate from your vault PIN and from the local .fwvault export passphrase.</li>
+      <li>Type it in and tap Set.</li>
+      <li>Repeat on every other device — Android, and later iOS/watchOS — typing the exact same passphrase each time.</li>
+      <li>Once two devices share that passphrase, their files start decrypting each other's uploads on the next sync. No further action needed.</li>
+    </ol>
+    <p class="muted small" style="color:var(--danger)">Write it down somewhere safe (a password manager, not a sticky note).
+      There is no "forgot passphrase" recovery — that's deliberate, it's what keeps Google from
+      ever reading your files. Lose it, and a new device can't decrypt what's already synced.</p>
+    <div class="btn-row">
+      <button class="btn" data-close>Got it</button>
+    </div>`);
 }
 
 async function refreshSecurityUI() {

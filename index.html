@@ -197,9 +197,12 @@
 
           <div id="sync-signed-in" class="hidden">
             <div id="sync-passphrase-row" class="hidden">
-              <p class="muted small">Signed in — set a sync passphrase to start syncing files.
-                It's separate from your vault PIN; use the <em>same</em> passphrase on every
-                device.</p>
+              <p class="muted small row-between" style="align-items:flex-start">
+                <span>Signed in — set a sync passphrase to start syncing files.
+                  It's separate from your vault PIN; use the <em>same</em> passphrase on every
+                  device.</span>
+                <button class="info-btn" id="btn-passphrase-info" type="button" aria-label="What is a sync passphrase?">i</button>
+              </p>
               <div class="sync-input-row">
                 <input type="password" id="sync-passphrase-input" placeholder="Sync passphrase" />
                 <button class="btn" id="btn-set-passphrase">Set</button>
