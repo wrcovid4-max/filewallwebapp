@@ -91,6 +91,14 @@ IndexedDB — the closest the web gets to the Android Keystore.
 
 ## Browser support
 
-Chrome/Edge 108+, Safari 16+, Firefox 114+ (needs module workers + OPFS). If a
+Chrome/Edge 108+, Firefox 114+, Safari 15.2+ (needs module workers + OPFS). If a
 required capability is missing, FileWall shows a screen naming exactly what,
 rather than a half-working vault.
+
+Safari 16.4+ gets the fast path — `createSyncAccessHandle()` for off-thread
+positional file IO. Safari 15.2–16.3 (notably: the last Safari a Mac stuck on
+macOS Monterey can run, since Apple only backports Safari to the newest two
+major macOS versions) falls back to `createWritable()`/`Blob.slice()` in
+worker.js — same OPFS storage, same encryption, just async instead of sync
+under the hood. Slower on very large files, otherwise no user-visible
+difference.

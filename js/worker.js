@@ -19,6 +19,17 @@ import {
 import { openDB, kvGet, kvPut } from './idb.js';
 import { buildArchive, extractArchive, parseArchiveFrames } from './archive.js';
 
+// createSyncAccessHandle only shipped in Safari 16.4 (March 2023) — OPFS itself
+// existed since Safari 15.2, but without this call. macOS only backports Safari
+// to its newest two major versions, so a Mac stuck on Monterey (macOS 12) tops
+// out at Safari 15.6: it reaches getDirectory()/getFileHandle() fine, just not
+// this one. HAS_SYNC_ACCESS picks a slower async path below (createWritable()
+// for writes, Blob.slice() for reads) instead of failing outright — same OPFS
+// storage and encryption either way, just without the off-thread positional
+// read/write fast path.
+const HAS_SYNC_ACCESS = typeof FileSystemFileHandle !== 'undefined'
+  && 'createSyncAccessHandle' in FileSystemFileHandle.prototype;
+
 // Session key registry. Main vault key is persisted (non-extractable) and loaded
 // lazily; the hidden key only exists here in memory after a successful unlock.
 const keys = new Map(); // vault -> CryptoKey
@@ -148,28 +159,49 @@ async function writeEncrypted(vault, srcBlob, onProgress) {
   const dir = await blobsDir();
   const blobId = uuid();
   const handle = await dir.getFileHandle(blobId, { create: true });
-  const access = await handle.createSyncAccessHandle();
-  try {
-    const baseNonce = randomBytes(8);
-    const total = srcBlob.size;
-    const header = buildHeader(baseNonce, total);
-    access.write(header, { at: 0 });
-    let offset = HEADER_SIZE;
-    const nChunks = Math.max(1, Math.ceil(total / CHUNK_SIZE));
-    for (let i = 0; i < nChunks; i++) {
-      const start = i * CHUNK_SIZE;
-      const end = Math.min(total, start + CHUNK_SIZE);
-      const plain = new Uint8Array(await srcBlob.slice(start, end).arrayBuffer());
-      const sealed = await sealChunk(key, baseNonce, i, plain);
-      access.write(sealed, { at: offset });
-      offset += sealed.byteLength;
-      if (onProgress) onProgress(end, total);
+  const baseNonce = randomBytes(8);
+  const total = srcBlob.size;
+  const header = buildHeader(baseNonce, total);
+  const nChunks = Math.max(1, Math.ceil(total / CHUNK_SIZE));
+
+  if (HAS_SYNC_ACCESS) {
+    const access = await handle.createSyncAccessHandle();
+    try {
+      access.write(header, { at: 0 });
+      let offset = HEADER_SIZE;
+      for (let i = 0; i < nChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(total, start + CHUNK_SIZE);
+        const plain = new Uint8Array(await srcBlob.slice(start, end).arrayBuffer());
+        const sealed = await sealChunk(key, baseNonce, i, plain);
+        access.write(sealed, { at: offset });
+        offset += sealed.byteLength;
+        if (onProgress) onProgress(end, total);
+      }
+      access.flush();
+    } finally {
+      access.close();
     }
-    access.flush();
-    return { blobId, size: total };
-  } finally {
-    access.close();
+  } else {
+    // Fallback: writes here are always sequential from byte 0, so a plain
+    // WritableStream needs no positional {at} at all — it's the random-access
+    // reads in readDecrypted that need Blob.slice() instead.
+    const writable = await handle.createWritable();
+    try {
+      await writable.write(header);
+      for (let i = 0; i < nChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(total, start + CHUNK_SIZE);
+        const plain = new Uint8Array(await srcBlob.slice(start, end).arrayBuffer());
+        const sealed = await sealChunk(key, baseNonce, i, plain);
+        await writable.write(sealed);
+        if (onProgress) onProgress(end, total);
+      }
+    } finally {
+      await writable.close();
+    }
   }
+  return { blobId, size: total };
 }
 
 // Decrypt an entire blob back to a Blob (used for images, documents, export).
@@ -177,28 +209,53 @@ async function readDecrypted(vault, blobId, mime) {
   const key = await keyFor(vault);
   const dir = await blobsDir();
   const handle = await dir.getFileHandle(blobId);
-  const access = await handle.createSyncAccessHandle();
-  try {
-    const size = access.getSize();
-    const headerBuf = new Uint8Array(HEADER_SIZE);
-    access.read(headerBuf, { at: 0 });
-    const { baseNonce, plaintextSize } = parseHeader(headerBuf);
-    const nChunks = Math.max(1, Math.ceil(plaintextSize / CHUNK_SIZE));
-    const parts = [];
-    let at = HEADER_SIZE;
-    for (let i = 0; i < nChunks; i++) {
-      const remainingCipher = size - at;
-      const thisEnc = Math.min(ENC_CHUNK_SIZE, remainingCipher);
-      const buf = new Uint8Array(thisEnc);
-      access.read(buf, { at });
-      at += thisEnc;
-      const plain = await openChunk(key, baseNonce, i, buf);
-      parts.push(plain);
+
+  let size, headerBuf, readAt;
+  let parts;
+  if (HAS_SYNC_ACCESS) {
+    const access = await handle.createSyncAccessHandle();
+    try {
+      size = access.getSize();
+      headerBuf = new Uint8Array(HEADER_SIZE);
+      access.read(headerBuf, { at: 0 });
+      readAt = (buf, at) => access.read(buf, { at });
+      parts = await decryptBody(key, size, headerBuf, readAt);
+    } finally {
+      access.close();
     }
-    return new Blob(parts, { type: mime || 'application/octet-stream' });
-  } finally {
-    access.close();
+  } else {
+    // Fallback: getFile() gives a Blob backed by the OPFS file; slice() supports
+    // arbitrary byte ranges async, same random-access shape createSyncAccessHandle
+    // gave synchronously, just one microtask per read instead of zero.
+    const file = await handle.getFile();
+    size = file.size;
+    headerBuf = new Uint8Array(await file.slice(0, HEADER_SIZE).arrayBuffer());
+    readAt = async (buf, at) => {
+      const chunk = new Uint8Array(await file.slice(at, at + buf.length).arrayBuffer());
+      buf.set(chunk);
+    };
+    parts = await decryptBody(key, size, headerBuf, readAt);
   }
+  return new Blob(parts, { type: mime || 'application/octet-stream' });
+}
+
+// Shared by both readDecrypted paths above — everything past "how do I read N
+// bytes at offset X" is identical whether that read is sync or async.
+async function decryptBody(key, size, headerBuf, readAt) {
+  const { baseNonce, plaintextSize } = parseHeader(headerBuf);
+  const nChunks = Math.max(1, Math.ceil(plaintextSize / CHUNK_SIZE));
+  const parts = [];
+  let at = HEADER_SIZE;
+  for (let i = 0; i < nChunks; i++) {
+    const remainingCipher = size - at;
+    const thisEnc = Math.min(ENC_CHUNK_SIZE, remainingCipher);
+    const buf = new Uint8Array(thisEnc);
+    await readAt(buf, at);
+    at += thisEnc;
+    const plain = await openChunk(key, baseNonce, i, buf);
+    parts.push(plain);
+  }
+  return parts;
 }
 
 async function deleteBlob(blobId) {
